@@ -1,0 +1,13 @@
+Request Usage Summary
+============================================================
+
+METHOD   SERVICE               COUNT      PCT    AVG TIME
+------------------------------------------------------------
+DELETE   reservations            155    15.5%    59.598ms
+GET      availabilities           93     9.3%    26.780ms
+GET      reservations            287    28.7%     4.927ms
+POST     reservations            332    33.2%   101.503ms
+PUT      reservations            133    13.3%   132.851ms
+
+------------------------------------------------------------
+TOTAL                            1000
