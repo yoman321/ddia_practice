@@ -1,0 +1,15 @@
+### Reflection
+
+#### Which model made which query natural?
+
+- **friendsOfFriends**: SQLite worked best (3.21ms) because the friendship table holds all relations, and querying friends of friends is a single self-join on the friendships table — the SQL engine handles the entire 2-hop traversal in one request. Conceptually, this query is most natural for the graph model — it's literally a 2-hop edge traversal (`X -FRIENDS_WITH-> friend -FRIENDS_WITH-> fof`), and Neo4j's Cypher expresses it in one line. Neo4j came in second (6.88ms) not because the model is a bad fit, but because the Bolt protocol overhead per session is high relative to the actual traversal work. MongoDB did very badly (29.10ms) because for every friend Y of user X, we have to fetch the document of friend Y and then fetch the friends of Y — an N+1 query pattern where each step is a separate round-trip to the server.
+
+- **postsByUser**: All 3 models performed well, but the document model was fastest (0.25ms). Posts are stored in a separate collection indexed by `author_id`, making it a single indexed lookup with no joins — this is the document model's sweet spot: queries that align with how the data is stored. SQLite also uses an index but has more overhead from the Flask server layer (1.08ms). Neo4j (0.94ms) traverses a single `AUTHORED` edge, which is straightforward but carries Bolt protocol overhead for what is a simple lookup.
+
+- **postsTaggingUserByFriendsOf**: This query crosses multiple relationships (friendship, authorship, tagging) — where you'd expect the graph model to shine. Neo4j expresses it as a single path pattern (`X -> friend -> post -> tagged_user`), and performed well (0.82ms). MongoDB was fastest (0.32ms) because its `$in` operator efficiently combines the two steps (fetch friend IDs, then query posts by `author_id` and `tagged_user_ids`) into minimal round-trips, leveraging indexes on both fields. SQLite (1.23ms) handles it in a single SQL query joining `friendships`, `posts`, and `tags`, but the Flask server layer adds overhead.
+
+#### Where did GraphQL help as a unifying layer, and where did it add overhead?
+
+- **Benefits**: GraphQL provided a uniform query interface — the client uses the same query shape, field names, and return types regardless of which backend it selects via the `backend` enum. Without GraphQL, each backend would need its own URL, request format, and response structure. GraphQL's introspection (the Docs sidebar, autocomplete in GraphiQL) lets clients discover available queries and fields without reading code or documentation. GraphQL also lets clients combine multiple queries in a single request using aliases (e.g., query all three backends at once), which REST can't do. Clients can also request only the fields they need, reducing payload size.
+
+- **Overhead**: GraphQL adds a serialization/deserialization layer — every query result gets converted to GraphQL types (`UserType`, `PostType`) before being returned, which is pure overhead for simple queries. We had to code up the schema, types, and resolvers.
